@@ -153,7 +153,7 @@ class HMDCNotifications:
         modTime = self._getRSSupdateTime()
 
         if modTime != self.lastUpdate or forceUpdate:
-            parsedOutages = Outages.parseOutagesXML( HMDCOutages(), 1 )
+            parsedOutages = HMDCOutages.parseOutagesXML( HMDCOutages(), 1 )
             sortedOutages = self.sortOutagesByStatus( parsedOutages )
             self.displayOutages( sortedOutages, True )
 
