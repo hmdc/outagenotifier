@@ -13,7 +13,10 @@ setup(author='Bradley Frank',
            ('/etc/xdg/autostart', ['startup/hmdcoutages.desktop']),
            ('/etc/profile.d', [
                'startup/hmdcoutages.csh',
-               'startup/hmdcoutages.sh'])],
+               'startup/hmdcoutages.sh']),
+           ('/var/spool/outagenotifier',[
+               'spool/OutagesCache.ics',
+               'spool/OutagesParsed.xml'])],
       description='Displays outage notifications in the RCE.',
       license='GPLv2',
       name='OutageNotifier',

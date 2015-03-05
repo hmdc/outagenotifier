@@ -110,7 +110,7 @@ class HMDCNotifications:
     #
     # Use the Outages class variable to keep things orderly.
     #
-    XML_FILE = Outages.DIR + "/" + Outages.PARSED_FILE
+    XML_FILE = HMDCOutages.DIR + "/" + HMDCOutages.PARSED_FILE
 
 
     def __init__( self ):
@@ -256,7 +256,7 @@ class HMDCNotifications:
     def printToCLI( self ):
         """Prints outages to the command line."""
 
-        parsedOutages = Outages.parseOutagesXML( Outages(), 1 )
+        parsedOutages = HMDCOutages.parseOutagesXML( HMDCOutages(), 1 )
         sortedOutages = self.sortOutagesByStatus( parsedOutages )
         self.displayOutages( sortedOutages )
 
