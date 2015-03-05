@@ -56,7 +56,7 @@ class HMDCOutages:
     HMDC_ICAL_FEED = "http://projects.iq.harvard.edu/rce/calendar/export.ics"
     HMDC_RSS_FEED = "http://projects.iq.harvard.edu/rce/calendar/rss.xml"
 
-    DIR = "/var/spool/HMDC/outagenotifier" # No trailing slash
+    DIR = "/var/spool/outagenotifier" # No trailing slash
 
     ICAL_CACHE = "OutagesCache.ics"
     ICAL_TEMP = "OutagesTemp.xml"
