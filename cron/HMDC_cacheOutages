@@ -1,7 +1,7 @@
 #
-# Cache RCE outages: calls outagenotifier.Outages().cacheOutages()
-# No output; cache files located at /var/spool/HMDC/outagenotifier
+# Cache RCE outages
+# No output; cache files located at /var/spool/outagenotifier
 # Be sure to leave a newline at the end of this file
 #
-*/5 * * * * root /usr/local/HMDC/sbin/cacheOutages.py
+*/5 * * * * root /usr/bin/cacheOutages.py
 
