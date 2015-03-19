@@ -162,7 +162,7 @@ class OutageNotifier:
       # Setup pop-up elements
       icon = self.settings['icon_path'] + "/" + outage['icon'] + ".svg"
       title = outage['title']
-      message = outage['message']
+      tooltip = outage['tooltip']
       timeout = outage['timeout']
       urgency = self.notify_urgency.get(outage['urgency'], default_urgency)
 
@@ -173,10 +173,10 @@ class OutageNotifier:
 
       # Update the toolbar icon
       self.icon.set_from_file(icon)
-      self.icon.set_tooltip(message)
+      self.icon.set_tooltip(tooltip)
 
       # Create the actual pop-up
-      notify_send = self.notify.Notification(title, message, icon)
+      notify_send = self.notify.Notification(title, tooltip, icon)
       notify_send.set_urgency(urgency)
       notify_send.set_timeout(timeout)
       notify_send.show()
@@ -205,19 +205,19 @@ class OutageNotifier:
       icon = widget.icon.text
       timeout = widget.timeout.text
       urgency = widget.urgency.text
-      message = widget.message.text
+      tooltip = widget.tooltip.text
 
       self.hmdclog.log('debug', "\tTitle: " + title)
       self.hmdclog.log('debug', "\tIcon: " + icon)
       self.hmdclog.log('debug', "\tTimeout: " + timeout)
       self.hmdclog.log('debug', "\tUrgency: " + urgency)
-      self.hmdclog.log('debug', "\tFull text: " + message)
+      self.hmdclog.log('debug', "\tFull text: " + tooltip)
 
       outages.append({'title': title,
                       'icon': icon,
                       'timeout': int(timeout),
                       'urgency': urgency,
-                      'message': message})
+                      'tooltip': tooltip})
 
     return outages
 
