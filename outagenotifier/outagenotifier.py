@@ -1,11 +1,5 @@
 #!/usr/bin/env python
 
-from termcolor import colored
-import datetime
-import os
-import time
-import webbrowser
-
 __author__ = "Harvard-MIT Data Center DevOps"
 __copyright__ = "Copyright 2015, HMDC"
 __credits__ = ["Bradley Frank"]
@@ -14,42 +8,73 @@ __maintainer__ = "HMDC"
 __email__ = "linux@lists.hmdc.harvard.edu"
 __status__ = "Production"
 
-class OutageNotifier:
-  """Formats and displays notifications to console or Gnome panel widget.
+from bs4 import BeautifulSoup
+import ConfigParser
+import hmdclogger
+import gobject
+import gtk
+import os
+import pygtk
+import pynotify
+import webbrowser
+
+class OutageNotifier():
+  """Displays notifications to a Gnome panel widget.
 
   Example:
-    notifier = OutageNotifier()
-    # TODO
+    import outagenotifier
+    notifier = outagenotifier.OutageNotifier
+    notifier.widget_init()
 
   Private Functions:
+    _button_press_event: Handles mouse clicks on the toolbar icon.
     _get_settings: Parses the conf file for settings.
-    _buttonPressEvent: Captures mouse clicks on the icon widget.
-    _getRSSupdateTime: Returns the mtime of the clean RSS feed.
+    _set_logger: Creates a logger.
 
   Public Functions:
-    checkForUpdates: Checks for RSS updates by using the clean RSS mtime.
-    displayOutages: Prints outages to stdout or widget notifications.
-    printToCLI: Calls appropropriate methods to print Outages to CLI.
-    sortOutagesByStatus: Groups outages by their status.
-    updateWidget: Updates widget icons and handles notification pop-ups.
-    widgetInit: Initializes a toolbar icon and handles first check.
+    get_updates: Compares notification file mtime to check for updates.
+    output_to_widget: Sets widget icon and displays notifications.
+    parse_xml: Reads in widget data from notifications XML file.
+    widget_init: Initializes the widget and does initial check for outages.
 
   Class Variables:
-    CONFIG_FILE (string): Location of conf file to import self.settings.
+    CONFIG_FILE (string): Full path of the configuration (conf) file.
   """
 
   CONFIG_FILE = "/etc/outagenotifier.conf"
 
-  def __init__( self ):
-    """
-    Instance Variables:
-      lastUpdate (int): The mtime of the XML file.
+  def __init__(self, debug_level=None, log_to_console=False, log_to_file=False):
+    """Sets up module settings and a logging instance.
+
+    Parameters:
+      debug_level (string): Optionally override the debugging level.
+      log_to_console (boolean): Optionally log to console.
+      log_to_file (boolean): Optionally log to a file (defined in CONFIG_FILE).
+
+    Attributes:
+      settings (dictionary): Global module settings.
+      hmdclog (instance): Instance of HMDCLogger for logging.
+      last_updated (int): Last time an outages update was seen (unix timestamp).
     """
 
-    #
-    # Set to 0 so the initial run will immediately poll for outages.
-    #
-    self.lastUpdate = 0
+    self.settings = self._get_settings()
+    self.hmdclog = self._set_logger(debug_level, log_to_console, log_to_file)
+
+    # Set to zero to force an initial check for outages.
+    self.last_updated = 0
+    # Set full path to notifications file.
+    self.source = self.settings['working_directory'] + "/notifications.xml"
+
+    self.hmdclog.log('debug', "Source file: " + self.source)
+    self.hmdclog.log('debug', "Last updated: " + str(self.last_updated))
+
+  def _button_press_event(self, widget, event):
+    """Wrapper function for capturing mouse clicks on the widget."""
+
+    if event.button == 1:  # left click
+      self.get_updates(True)
+    elif event.button == 3:  # right click
+      webbrowser.open_new("http://projects.iq.harvard.edu/rce/calendar")
 
   def _get_settings(self):
     """Parses the conf file for settings."""
@@ -61,470 +86,180 @@ class OutageNotifier:
       # Debugging
       'debug_level': config.get('Debugging', 'debug_level'),
       'log_file': config.get('Debugging', 'log_file'),
-      # Parsing
-      'resolved_pattern': config.get('Parsing', 'resolved_pattern'),
-      # Sources
-      'feed_url': config.get('Sources', 'feed_url'),
-      'website_url': config.get('Sources', 'website_url'),
       # WorkingFiles
-      'notifications': config.get('WorkingFiles', 'notifications'),
-      'preserve_versions': config.getboolean('WorkingFiles', 'preserve_versions'),
       'working_directory': config.get('WorkingFiles', 'working_directory'),
+      # Widget
+      'icon_path': config.get('Widget', 'icon_path'),
+      'update_interval': config.getint('Widget', 'update_interval')
     }
 
     return settings
 
-  def _getRSSupdateTime( self ):
-    """Returns the mtime of the notifications feed."""
-    return os.path.getmtime(self.XML_FILE)
+  def _set_logger(self, debug_level, log_to_console, log_to_file):
+    """Creates an instance of HMDCLogger with appropriate handlers."""
 
-  def create_outages_output(self, sorted_outages):
-    """Returns GUI and console output based on outage status.
+    config_name = self.__class__.__name__
 
-    Arguments:
-      sorted_outages (dictionary): Outages sorted into buckets of
-        "completed", "active", and "scheduled".
+    if debug_level is None:
+      hmdclog = hmdclogger.HMDCLogger(config_name, self.settings['debug_level'])
+      hmdclog.log_to_file(self.settings['log_file'])
+    else:
+      hmdclog = hmdclogger.HMDCLogger(config_name, debug_level)
 
-    Attributes:
-      cns_text (string): Link header text for printing to console.
-      counter (int): Counts interations for debugging text.
-      gui_text (string): Link header text for displaying to the widget.
-      icon (string): Icon to use with associated outage status.
-      link_color (string): Shared text color for URLs.
-      message (string): Formatted text to display on the widget or console.
-      timeout (int): Time to keep the widget displayed (milliseconds).
-      title (string): Name of the outage.
-      urgency (string): Urgency level used by NOTIFY_SEND.
+      # There must be at least one handler.
+      if log_to_console is False and log_to_file is False:
+        raise Exception("You must set a logging handler (console or file).")
 
-    Returns:
-      output (dictionary): GUI and console output sorted into lists.
-    """
+      # Log to console and/or file.
+      if log_to_console:
+        hmdclog.log_to_console()
+      if log_to_file:
+        hmdclog.log_to_file(self.settings['log_file'])
 
-    cns_text = "Please see the following URL for more information:"
-    gui_text = "Right click the outages toolbar icon for more information."
-    link_color = 'blue'
-    output = {'gui': [], 'console': []}
+    return hmdclog
 
-    #
-    # Create output for all completed outages.
-    #
-    counter = 1
-    for completed in sorted_outages['completed']:
-      self.hmdclog.log('debug', "")
-      self.hmdclog.log('info', "Begin creating output for completed outage #" + str(counter) + ".")
-      #
-      # Completed outages without a specific end time won't display
-      # at all; see sort_outages_by_status() for more information.
-      #
-      title = completed['title']
-      complete_text = title + " is now complete."
+  def get_updates(self, force_update=False):
+    """Compares notification file mtime to check for updates.
 
-      # GUI output
-      icon = self.settings['states']['completed']['icon']
-      message = complete_text + "\n" + gui_text
-      timeout = self.settings['states']['completed']['timeout']
-      urgency = self.settings['states']['completed']['urgency']
-
-      output['gui'].append({'icon': icon, 'message': message, 'timeout': timeout,
-                  'title': title, 'urgency': urgency})
-
-      self.hmdclog.log('debug', "GUI settings:")
-      self.hmdclog.log('debug', "\tTitle: " + title)
-      self.hmdclog.log('debug', "\tIcon: " + str(icon))
-      self.hmdclog.log('debug', "\tTimeout: " + str(timeout))
-      self.hmdclog.log('debug', "\tUrgency: " + str(urgency))
-
-      # Console output
-      link = colored(completed['link'], link_color)
-      text = colored(complete_text, 'yellow', attrs=['bold'])
-      message = text + "\n" + cns_text + "\n\t" + link + "\n"
-      output['console'].append(message)
-
-      self.hmdclog.log('debug', "Console output:")
-      self.hmdclog.log('debug', "\tText: " + str(complete_text))
-
-      self.hmdclog.log('info', "Finished creating output for completed outage #" +
-               str(counter) + ".")
-      counter += 1
-
-    #
-    # Create output for upcoming outages.
-    #
-    counter = 1
-    for scheduled in sorted_outages['scheduled']:
-      self.hmdclog.log('debug', "")
-      self.hmdclog.log('info', "Begin creating output for scheduled outage #" +
-               str(counter) + ".")
-
-      start_time = self.format_date(scheduled['start_time'], 'start_time')
-      title = scheduled['title']
-      scheduled_text = title + " is scheduled to start on " + start_time
-
-      # GUI output
-      icon = self.settings['states']['scheduled']['icon']
-      message = scheduled_text + "\n" + scheduled['link'] + "\n" + gui_text
-      timeout = self.settings['states']['scheduled']['timeout']
-      urgency = self.settings['states']['scheduled']['urgency']
-
-      output['gui'].append({'icon': icon, 'message': message, 'timeout': timeout,
-                  'title': title, 'urgency': urgency})
-
-      self.hmdclog.log('debug', "GUI settings:")
-      self.hmdclog.log('debug', "\tTitle: " + title)
-      self.hmdclog.log('debug', "\tIcon: " + str(icon))
-      self.hmdclog.log('debug', "\tTimeout: " + str(timeout))
-      self.hmdclog.log('debug', "\tUrgency: " + str(urgency))
-
-      # Console output
-      link = colored(scheduled['link'], link_color)
-      text = colored(scheduled['title'], attrs=['bold']) + \
-        " is scheduled to start on " + colored(start_time, 'green') + "."
-      message = text + "\n" + cns_text + "\n\t" + link + "\n"
-      output['console'].append(message)
-
-      self.hmdclog.log('debug', "Console output:")
-      self.hmdclog.log('debug', "\tText: " + str(scheduled_text))
-
-      self.hmdclog.log('info', "Finished creating output for scheduled outage #" +
-               str(counter) + ".")
-      counter += 1
-
-    #
-    # Create output for all outages currently in progress.
-    #
-    counter = 1
-    for active in sorted_outages['active']:
-      self.hmdclog.log('debug', "")
-      self.hmdclog.log('info', "Begin creating output for active outage #" + \
-               str(counter) + ".")
-
-      # If end_time exists, add it to the output.
-      if active['end_time'] != 0:
-        end_time = " until " + self.format_date(active['end_time'], 'end_time')
-      else:
-        end_time = ""
-
-      title = active['title']
-      active_text = title + " is in progress" + end_time
-
-      # GUI output
-      icon = self.settings['states']['active']['icon']
-      timeout = self.settings['states']['active']['timeout']
-      urgency = self.settings['states']['active']['urgency']
-      message = active_text + "." + "\n" + gui_text
-
-      output['gui'].append({'icon': icon, 'message': message, 'timeout': timeout,
-                  'title': title, 'urgency': urgency})
-
-      self.hmdclog.log('debug', "GUI settings:")
-      self.hmdclog.log('debug', "\tTitle: " + title)
-      self.hmdclog.log('debug', "\tIcon: " + str(icon))
-      self.hmdclog.log('debug', "\tTimeout: " + str(timeout))
-      self.hmdclog.log('debug', "\tUrgency: " + str(urgency))
-
-      # Console output
-      link = colored(active['link'], link_color)
-      text = colored(active['title'], attrs=['bold']) + \
-        colored(" is in progress" + end_time + ".", 'red', attrs=['bold'])
-      message = text + "\n" + cns_text + "\n\t" + link + "\n"
-      output['console'].append(message)
-
-      self.hmdclog.log('debug', "Console output:")
-      self.hmdclog.log('debug', "\tText: " + str(active_text))
-
-      self.hmdclog.log('info', "Finished creating output for active outage #" + \
-               str(counter) + ".")
-      counter += 1
-
-    self.hmdclog.log('debug', "")
-    return output
-
-  def create_outages_output(self, sorted_outages):
-    """Returns GUI and console output based on outage status.
-
-    Arguments:
-      sorted_outages (dictionary): Outages sorted into buckets of
-        "completed", "active", and "scheduled".
+    Parameters:
+      force_update (boolean): Forces widgets to re-display.
 
     Attributes:
-      cns_text (string): Link header text for printing to console.
-      counter (int): Counts interations for debugging text.
-      gui_text (string): Link header text for displaying to the widget.
-      icon (string): Icon to use with associated outage status.
-      link_color (string): Shared text color for URLs.
-      message (string): Formatted text to display on the widget or console.
-      timeout (int): Time to keep the widget displayed (milliseconds).
-      title (string): Name of the outage.
-      urgency (string): Urgency level used by NOTIFY_SEND.
-
-    Returns:
-      output (dictionary): GUI and console output sorted into lists.
+      mtime (int): Last modification time to notifications file.
     """
 
-    cns_text = "Please see the following URL for more information:"
-    gui_text = "Right click the outages toolbar icon for more information."
-    link_color = 'blue'
-    output = {'gui': [], 'console': []}
+    mtime = int(os.path.getmtime(self.source))
+    self.hmdclog.log('debug', "Notfications mtime: " + str(mtime))
+    self.hmdclog.log('debug', "Last updated: " + str(self.last_updated))
 
-    #
-    # Create output for all completed outages.
-    #
-    counter = 1
-    for completed in sorted_outages['completed']:
-      self.hmdclog.log('debug', "")
-      self.hmdclog.log('info', "Begin creating output for completed outage #" + str(counter) + ".")
-      #
-      # Completed outages without a specific end time won't display
-      # at all; see sort_outages_by_status() for more information.
-      #
-      title = completed['title']
-      complete_text = title + " is now complete."
+    if mtime != self.last_updated:
+      self.hmdclog.log('info', "Updates found to outage list.")
+      self.last_updated = mtime
+      outages = self.parse_xml()
+      self.output_to_widget(outages)
+    else:
+      self.hmdclog.log('info', "No updates found to outage list.")
 
-      # GUI output
-      icon = self.settings['states']['completed']['icon']
-      message = complete_text + "\n" + gui_text
-      timeout = self.settings['states']['completed']['timeout']
-      urgency = self.settings['states']['completed']['urgency']
+    gobject.timeout_add(self.settings['update_interval'], self.get_updates)
 
-      output['gui'].append({'icon': icon, 'message': message, 'timeout': timeout,
-                  'title': title, 'urgency': urgency})
+  def output_to_widget(self, outages):
+    """Sets widget icon and displays notifications.
 
-      self.hmdclog.log('debug', "GUI settings:")
-      self.hmdclog.log('debug', "\tTitle: " + title)
-      self.hmdclog.log('debug', "\tIcon: " + str(icon))
-      self.hmdclog.log('debug', "\tTimeout: " + str(timeout))
-      self.hmdclog.log('debug', "\tUrgency: " + str(urgency))
-
-      # Console output
-      link = colored(completed['link'], link_color)
-      text = colored(complete_text, 'yellow', attrs=['bold'])
-      message = text + "\n" + cns_text + "\n\t" + link + "\n"
-      output['console'].append(message)
-
-      self.hmdclog.log('debug', "Console output:")
-      self.hmdclog.log('debug', "\tText: " + str(complete_text))
-
-      self.hmdclog.log('info', "Finished creating output for completed outage #" +
-               str(counter) + ".")
-      counter += 1
-
-    #
-    # Create output for upcoming outages.
-    #
-    counter = 1
-    for scheduled in sorted_outages['scheduled']:
-      self.hmdclog.log('debug', "")
-      self.hmdclog.log('info', "Begin creating output for scheduled outage #" +
-               str(counter) + ".")
-
-      start_time = self.format_date(scheduled['start_time'], 'start_time')
-      title = scheduled['title']
-      scheduled_text = title + " is scheduled to start on " + start_time
-
-      # GUI output
-      icon = self.settings['states']['scheduled']['icon']
-      message = scheduled_text + "\n" + scheduled['link'] + "\n" + gui_text
-      timeout = self.settings['states']['scheduled']['timeout']
-      urgency = self.settings['states']['scheduled']['urgency']
-
-      output['gui'].append({'icon': icon, 'message': message, 'timeout': timeout,
-                  'title': title, 'urgency': urgency})
-
-      self.hmdclog.log('debug', "GUI settings:")
-      self.hmdclog.log('debug', "\tTitle: " + title)
-      self.hmdclog.log('debug', "\tIcon: " + str(icon))
-      self.hmdclog.log('debug', "\tTimeout: " + str(timeout))
-      self.hmdclog.log('debug', "\tUrgency: " + str(urgency))
-
-      # Console output
-      link = colored(scheduled['link'], link_color)
-      text = colored(scheduled['title'], attrs=['bold']) + \
-        " is scheduled to start on " + colored(start_time, 'green') + "."
-      message = text + "\n" + cns_text + "\n\t" + link + "\n"
-      output['console'].append(message)
-
-      self.hmdclog.log('debug', "Console output:")
-      self.hmdclog.log('debug', "\tText: " + str(scheduled_text))
-
-      self.hmdclog.log('info', "Finished creating output for scheduled outage #" +
-               str(counter) + ".")
-      counter += 1
-
-    #
-    # Create output for all outages currently in progress.
-    #
-    counter = 1
-    for active in sorted_outages['active']:
-      self.hmdclog.log('debug', "")
-      self.hmdclog.log('info', "Begin creating output for active outage #" + \
-               str(counter) + ".")
-
-      # If end_time exists, add it to the output.
-      if active['end_time'] != 0:
-        end_time = " until " + self.format_date(active['end_time'], 'end_time')
-      else:
-        end_time = ""
-
-      title = active['title']
-      active_text = title + " is in progress" + end_time
-
-      # GUI output
-      icon = self.settings['states']['active']['icon']
-      timeout = self.settings['states']['active']['timeout']
-      urgency = self.settings['states']['active']['urgency']
-      message = active_text + "." + "\n" + gui_text
-
-      output['gui'].append({'icon': icon, 'message': message, 'timeout': timeout,
-                  'title': title, 'urgency': urgency})
-
-      self.hmdclog.log('debug', "GUI settings:")
-      self.hmdclog.log('debug', "\tTitle: " + title)
-      self.hmdclog.log('debug', "\tIcon: " + str(icon))
-      self.hmdclog.log('debug', "\tTimeout: " + str(timeout))
-      self.hmdclog.log('debug', "\tUrgency: " + str(urgency))
-
-      # Console output
-      link = colored(active['link'], link_color)
-      text = colored(active['title'], attrs=['bold']) + \
-        colored(" is in progress" + end_time + ".", 'red', attrs=['bold'])
-      message = text + "\n" + cns_text + "\n\t" + link + "\n"
-      output['console'].append(message)
-
-      self.hmdclog.log('debug', "Console output:")
-      self.hmdclog.log('debug', "\tText: " + str(active_text))
-
-      self.hmdclog.log('info', "Finished creating output for active outage #" + \
-               str(counter) + ".")
-      counter += 1
-
-    self.hmdclog.log('debug', "")
-    return output
-
-  def sort_outages_by_status(self, outages):
-    """Sorts outages into one of three categories based on status.
-
-    Arguments:
-      outages (dictionary): Calendar events from the XML notifications feed.
+    Parameters:
+      outages (dictionary): Widget data for each outage.
 
     Attributes:
-      counter (int): Counts interations for debugging text.
-      has_ended (boolean):
-      has_end_time (boolean):
-      has_started (boolean):
-      now (int): current date and time as a unix timestamp.
-      seconds_until_end (int):
-      seconds_until_start (int):
-      within_future_scope (boolean):
-      within_past_scope (boolean):
-
-    Returns:
-      sorted_outages (dictionary): Outages sorted into buckets of
-        "completed", "active", and "scheduled".
+      counter (int): Used for debugging outage parsing.
+      default_urgency (instance): Urgency setting for pynotify module.
     """
 
-    sorted_outages = {"completed": [], "scheduled": [], "active": []}
-    now = int(time.time())
+    counter = 0
+    default_urgency = self.notify_urgency['URGENCY_NORMAL']
 
-    #
-    # Iterate over each outage and sort it based on several factors.
-    #
-    counter = 1
     for outage in outages:
-      self.hmdclog.log('debug', "")
-      self.hmdclog.log('info', "Begin sorting outage #" +
-               str(counter) + ": " + outage["title"])
-
-      #
-      # Calculates how many seconds until the start and end time.
-      #
-      seconds_until_start = outage["start_time"] - now
-      seconds_until_end = outage["end_time"] - now
-
-      self.hmdclog.log('debug', "seconds until start: " + str(seconds_until_start))
-      self.hmdclog.log('debug', "seconds until end: " + str(seconds_until_end))
-
-      #
-      # Determines if the outage has started and ended.
-      #
-      has_started = seconds_until_start <= 0
-      has_ended = seconds_until_end <= 0
-
-      self.hmdclog.log('debug', "has started: " + str(has_started))
-      self.hmdclog.log('debug', "has ended: " + str(has_ended))
-
-      #
-      # Some outages may not have a defined end time.
-      #
-      has_end_time = outage["end_time"] != 0
-
-      self.hmdclog.log('debug', "has end time: " + str(has_end_time))
-
-      #
-      # This should never happen, so attempt to capture it.
-      #
-      if has_end_time and (has_ended and not has_started):
-        raise Exception("Event can't end without starting!")
-
-      #
-      # Determines if the outage fits into the defined scopes.
-      #
-      within_future_scope = seconds_until_start < self.settings['scope_ahead']
-      within_past_scope = abs(seconds_until_end) < self.settings['scope_past']
-
-      self.hmdclog.log('debug', "within future scope: " + str(within_future_scope))
-      self.hmdclog.log('debug', "within past scope: " + str(within_past_scope))
-
-      #
-      # Was previously cast as boolean.
-      #
-      resolved = outage["resolved"]
-
-      self.hmdclog.log('debug', "resolved: " + str(resolved))
-
-      #
-      # Outage is in progress if it:
-      #   o has already started
-      #   o has not ended or doesn't have an end time
-      #   o is not resolved yet
-      #
-      if (has_started and (not has_ended or not has_end_time)) and not resolved:
-        sorted_outages["active"].append(outage)
-        self.hmdclog.log('debug', "Added outage to \"active\" queue.")
-
-      #
-      # Outage is complete if it:
-      #   o has started and ended
-      #   o is resolved
-      # ...but only display the completed outage if it falls in the
-      # scope. NOTE: within_past_scope doesn't work for outages that
-      # are missing a defined end time, so those events will not
-      # display once they are marked "resolved" in the calendar.
-      #
-      elif ((has_started and has_ended) or resolved) and within_past_scope:
-        sorted_outages["completed"].append(outage)
-        self.hmdclog.log('debug', "Added outage to \"completed\" queue.")
-
-      #
-      # Outage is upcoming if it:
-      #   o has not started
-      #   o is not resolved
-      # ...but only display the outage if it falls in the scope.
-      #
-      elif (not has_started and not resolved) and within_future_scope:
-        sorted_outages["scheduled"].append(outage)
-        self.hmdclog.log('debug', "Added outage to \"scheduled\" queue.")
-
-      #
-      # Outage does not meet any of the above three criteria.
-      #
-      else:
-        self.hmdclog.log('debug', "Outage not added to any queue.")
-
-      self.hmdclog.log('info', "Completed sorting outage #" + str(counter) + ".")
       counter += 1
 
-    self.hmdclog.log('debug', "")
-    return sorted_outages
+      # Setup pop-up elements
+      icon = self.settings['icon_path'] + "/" + outage['icon'] + ".svg"
+      title = outage['title']
+      message = outage['message']
+      timeout = outage['timeout']
+      urgency = self.notify_urgency.get(outage['urgency'], default_urgency)
+
+      self.hmdclog.log('debug', "Creating widget output #" + str(counter))
+      self.hmdclog.log('debug', "\tTitle: " + title)
+      self.hmdclog.log('debug', "\tIcon: " + icon)
+      self.hmdclog.log('debug', "\tUrgency: " + outage['urgency'])
+
+      # Update the toolbar icon
+      self.icon.set_from_file(icon)
+      self.icon.set_tooltip(message)
+
+      # Create the actual pop-up
+      notify_send = self.notify.Notification(title, message, icon)
+      notify_send.set_urgency(urgency)
+      notify_send.set_timeout(timeout)
+      notify_send.show()
+
+      self.hmdclog.log('debug', "")
+
+  def parse_xml(self):
+    """Reads in widget data from notifications XML file."""
+
+    if os.path.isfile(self.source):
+      with open(self.source, 'r') as file:
+        xml_file = BeautifulSoup(file, 'xml')
+      self.hmdclog.log('debug', "Read in file: " + self.source)
+    else:
+      raise Exception("Notifications file not found!")
+
+    counter = 0
+    outages = []
+    widgets = xml_file.find_all("widget")
+
+    for widget in widgets:
+      counter += 1
+      self.hmdclog.log('debug', "Parsing widget #" + str(counter) + ".")
+
+      title = widget.title.text
+      icon = widget.icon.text
+      timeout = widget.timeout.text
+      urgency = widget.urgency.text
+      message = widget.message.text
+
+      self.hmdclog.log('debug', "\tTitle: " + title)
+      self.hmdclog.log('debug', "\tIcon: " + icon)
+      self.hmdclog.log('debug', "\tTimeout: " + timeout)
+      self.hmdclog.log('debug', "\tUrgency: " + urgency)
+      self.hmdclog.log('debug', "\tFull text: " + message)
+
+      outages.append({'title': title,
+                      'icon': icon,
+                      'timeout': int(timeout),
+                      'urgency': urgency,
+                      'message': message})
+
+    return outages
+
+  def widget_init(self):
+    """Initializes the widget and does an initial check for outages.
+
+    Attributes:
+      icon (instance): GTK toolbar icon.
+      notify_urgency (dictionary): Wrapper for pynotify urgency variables.
+    """
+
+    #
+    # Initialize the pop-up widget.
+    #
+    self.notify = pynotify
+    self.notify.init("OutageNotifier")
+    self.notify_urgency = {
+        'URGENCY_LOW': self.notify.URGENCY_LOW,
+        'URGENCY_NORMAL': self.notify.URGENCY_NORMAL,
+        'URGENCY_CRITICAL': self.notify.URGENCY_CRITICAL
+    }
+
+    #
+    # Initialize PyGTK and setup the toolbar icon.
+    #
+    gtk.gdk.threads_init()
+    default_icon = self.settings['icon_path'] + "/outages-default.svg"
+    self.hmdclog.log('debug', "Default icon: " + default_icon)
+    self.icon = gtk.status_icon_new_from_file(default_icon)
+    self.icon.set_tooltip("Loading...")
+    self.icon.set_visible(True)
+
+    #
+    # GTK signals: https://developer.gnome.org/gtk3/stable/GtkWidget.html
+    #
+    self.icon.connect('button-press-event', self._button_press_event)
+
+    #
+    # Begin polling for updates.
+    #
+    gobject.timeout_add(5000, self.get_updates)
+    gtk.main()
 
 if __name__ == '__main__':
-    pass
+  pass

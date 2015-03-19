@@ -21,16 +21,19 @@ class OutageParser:
   """
 
   Example:
-    notifier = OutageNotifier()
-    # TODO
+    import outageparser
+    parser = outageparser.OutageParser()
+    notifications = parser.get_notifications()
+    for message in notifications['console']
+      print message
 
   Private Functions:
-    _get_settings: Parses the conf file for settings.
     _get_update_time: Returns the mtime of the notification feed.
 
   Public Functions:
     create_outages_output:
     get_notifications:
+    get_settings: Parses the conf file for settings.
     parse_xml:
     sort_outages_by_status:
 
@@ -52,44 +55,12 @@ class OutageParser:
       hmdclog (instance): Instance of HMDCLogger for logging.
     """
 
-    self.settings = self._get_settings()
+    self.settings = self.get_settings()
 
     if logger is None:
       self.hmdclog = self._set_logger(debug_level, log_to_console, log_to_file)
     else:
       self.hmdclog = logger
-
-  def _get_settings(self):
-    """Parses the conf file for settings."""
-
-    config = ConfigParser.ConfigParser()
-    config.read(self.CONFIG_FILE)
-
-    settings = {
-      # Debugging
-      'debug_level': config.get('Debugging', 'debug_level'),
-      'log_file': config.get('Debugging', 'log_file'),
-      # Parsing
-      'scope_ahead': config.getint('Parsing', 'scope_ahead'),
-      'scope_past': config.getint('Parsing', 'scope_past'),
-      # States
-      'states': {},
-      # WorkingFiles
-      'working_directory': config.get('WorkingFiles', 'working_directory'),
-      # Widget
-      'icon_path': config.get('Widget', 'icon_path'),
-      'update_interval': config.getint('Widget', 'update_interval'),
-    }
-
-    for state in ('active', 'completed', 'default', 'error', 'none', 'scheduled'):
-      icon, timeout, urgency = config.get('States', state).split(':')
-      settings['states'][state] = {
-        'icon': icon,
-        'timeout': int(timeout),
-        'urgency': urgency
-      }
-
-    return settings
 
   def _set_logger(self, debug_level, log_to_console, log_to_file):
     """Creates an instance of HMDCLogger with appropriate handlers."""
@@ -104,7 +75,7 @@ class OutageParser:
 
       # There must be at least one handler.
       if log_to_console is False and log_to_file is False:
-        raise Exception("You must set a logging handler (console or file).")
+        raise Exception("You must set a console or file logging handler.")
 
       # Log to console and/or file.
       if log_to_console:
@@ -293,6 +264,38 @@ class OutageParser:
     output = self.create_outages_output(sorted_outages)
 
     return output
+
+  def get_settings(self):
+    """Parses the conf file for settings."""
+
+    config = ConfigParser.ConfigParser()
+    config.read(self.CONFIG_FILE)
+
+    settings = {
+      # Debugging
+      'debug_level': config.get('Debugging', 'debug_level'),
+      'log_file': config.get('Debugging', 'log_file'),
+      # Parsing
+      'scope_ahead': config.getint('Parsing', 'scope_ahead'),
+      'scope_past': config.getint('Parsing', 'scope_past'),
+      # States
+      'states': {},
+      # WorkingFiles
+      'working_directory': config.get('WorkingFiles', 'working_directory'),
+      # Widget
+      'icon_path': config.get('Widget', 'icon_path'),
+      'update_interval': config.getint('Widget', 'update_interval'),
+    }
+
+    for state in ('active', 'completed', 'default', 'error', 'none', 'scheduled'):
+      icon, timeout, urgency = config.get('States', state).split(':')
+      settings['states'][state] = {
+        'icon': icon,
+        'timeout': int(timeout),
+        'urgency': urgency
+      }
+
+    return settings
 
   def parse_xml(self, source):
     """Parses a notification feed into a dictionary.

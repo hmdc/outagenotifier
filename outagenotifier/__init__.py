@@ -1,2 +1,1 @@
-from hmdcoutages import HMDCOutages
-from hmdcnotifications import HMDCNotifications
+from outageparser import OutageParser
