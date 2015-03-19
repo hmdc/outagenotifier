@@ -18,7 +18,7 @@ import pygtk
 import pynotify
 import webbrowser
 
-class OutageNotifier():
+class OutageNotifier:
   """Displays notifications to a Gnome panel widget.
 
   Example:
