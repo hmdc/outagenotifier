@@ -24,7 +24,7 @@ setup(author='Bradley Frank',
            'gtk',
            'os',
            'pygtk',
-           'pynotify'
+           'pynotify',
            'webbrowser'],
       scripts=[
            'scripts/outages.py',
