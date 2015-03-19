@@ -21,8 +21,9 @@ __status__ = "Production"
 CONFIG_FILE = "/etc/outagenotifier.conf"
 NOTIFICATIONS_FILE = "notifications.xml"
 
-
 def get_settings(config_file):
+  """Parses the conf file for settings."""
+
   config = ConfigParser.ConfigParser()
   config.read(config_file)
 

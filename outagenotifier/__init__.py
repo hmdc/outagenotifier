@@ -1,1 +1,1 @@
-from outageparser import OutageParser
+from outagenotifier import OutageNotifier

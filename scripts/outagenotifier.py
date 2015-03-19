@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from outagenotifier import OutageNotifier
-
-notifier = OutageNotifier()
+import outagenotifier
+notifier = outagenotifier.OutageNotifier()
 notifier.widget_init()
