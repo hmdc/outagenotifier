@@ -1,13 +1,5 @@
 #!/usr/bin/env python
 
-__author__ = "Harvard-MIT Data Center DevOps"
-__copyright__ = "Copyright 2015, HMDC"
-__credits__ = ["Bradley Frank"]
-__license__ = "GPLv2"
-__maintainer__ = "HMDC"
-__email__ = "linux@lists.hmdc.harvard.edu"
-__status__ = "Production"
-
 from bs4 import BeautifulSoup
 import ConfigParser
 import hmdclogger
@@ -17,6 +9,15 @@ import os
 import pygtk
 import pynotify
 import webbrowser
+
+__author__ = "Harvard-MIT Data Center DevOps"
+__copyright__ = "Copyright 2015, HMDC"
+__credits__ = ["Bradley Frank"]
+__license__ = "GPLv2"
+__maintainer__ = "HMDC"
+__email__ = "linux@lists.hmdc.harvard.edu"
+__status__ = "Production"
+
 
 class OutageNotifier():
   """Displays notifications to a Gnome panel widget.
