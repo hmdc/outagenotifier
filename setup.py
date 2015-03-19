@@ -9,6 +9,7 @@ setup(author='Bradley Frank',
                'icons/outages-default.svg',
                'icons/outages-error.svg',
                'icons/outages-scheduled.svg',]),
+           ('/etc', ['conf/outagenotifier.conf']),
            ('/etc/xdg/autostart', ['startup/hmdcoutages.desktop']),
            ('/etc/profile.d', [
                'startup/hmdcoutages.csh',
