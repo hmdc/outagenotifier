@@ -44,13 +44,16 @@ class OutageNotifier():
 
   CONFIG_FILE = "/etc/outagenotifier.conf"
 
-  def __init__(self, debug_level=None, log_to_console=False, log_to_file=False):
+  def __init__(self, logger=None, debug_level=None,
+               log_to_console=False, log_to_file=False, log_file=None):
     """Sets up module settings and a logging instance.
 
     Parameters:
+      logger (instance): Previous instance of hmdclogger.
       debug_level (string): Optionally override the debugging level.
       log_to_console (boolean): Optionally log to console.
-      log_to_file (boolean): Optionally log to a file (defined in CONFIG_FILE).
+      log_to_file (boolean): Optionally log to a file.
+      log_file (string): Full path to a log file.
 
     Attributes:
       settings (dictionary): Global module settings.
@@ -59,7 +62,10 @@ class OutageNotifier():
     """
 
     self.settings = self._get_settings()
-    self.hmdclog = self._set_logger(debug_level, log_to_console, log_to_file)
+    if logger is not None:
+      self.hmdclog = logger
+    else:
+      self.hmdclog = self._set_logger(debug_level, log_to_console, log_to_file, log_file)
 
     # Set to zero to force an initial check for outages.
     self.last_updated = 0
@@ -84,9 +90,6 @@ class OutageNotifier():
     config.read(self.CONFIG_FILE)
 
     settings = {
-      # Debugging
-      'debug_level': config.get('Debugging', 'debug_level'),
-      'log_file': config.get('Debugging', 'log_file'),
       # WorkingFiles
       'working_directory': config.get('WorkingFiles', 'working_directory'),
       # Widget
@@ -96,26 +99,29 @@ class OutageNotifier():
 
     return settings
 
-  def _set_logger(self, debug_level, log_to_console, log_to_file):
+  def _set_logger(self, debug_level, log_to_console, log_to_file, log_file):
     """Creates an instance of HMDCLogger with appropriate handlers."""
 
     config_name = self.__class__.__name__
 
     if debug_level is None:
-      hmdclog = hmdclogger.HMDCLogger(config_name, self.settings['debug_level'])
-      hmdclog.log_to_file(self.settings['log_file'])
-    else:
-      hmdclog = hmdclogger.HMDCLogger(config_name, debug_level)
+      hmdclog = hmdclogger.HMDCLogger(config_name, 'NOTSET')
+      hmdclog.log_to_console()  # A blank handler.
+      return hmdclog
 
-      # There must be at least one handler.
-      if log_to_console is False and log_to_file is False:
-        raise Exception("You must set a logging handler (console or file).")
+    hmdclog = hmdclogger.HMDCLogger(config_name, debug_level)
 
-      # Log to console and/or file.
-      if log_to_console:
-        hmdclog.log_to_console()
-      if log_to_file:
-        hmdclog.log_to_file(self.settings['log_file'])
+    # There must be at least one handler.
+    if log_to_console is False and log_to_file is False:
+      raise Exception("You must set a logging handler (console or file).")
+
+    # Log to console and/or file.
+    if log_to_console:
+      hmdclog.log_to_console()
+    if log_to_file:
+      if log_file is None:
+        log_file = os.path.expanduser('~') + "/outagenotifier.log"
+      hmdclog.log_to_file(log_file)
 
     return hmdclog
 

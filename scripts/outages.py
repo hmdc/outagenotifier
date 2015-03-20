@@ -21,6 +21,7 @@ __status__ = "Production"
 CONFIG_FILE = "/etc/outagenotifier.conf"
 NOTIFICATIONS_FILE = "notifications.xml"
 
+
 def get_settings(config_file):
   """Parses the conf file for settings."""
 
@@ -34,6 +35,7 @@ def get_settings(config_file):
 
   return settings
 
+
 def set_logger(debug_level):
   """Creates an instance of HMDCLogger with appropriate handlers."""
 
@@ -41,6 +43,7 @@ def set_logger(debug_level):
   hmdclog.log_to_console()
 
   return hmdclog
+
 
 def parse_xml(source, hmdclog):
   """Reads in messages from notifications XML file."""
