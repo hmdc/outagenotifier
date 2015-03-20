@@ -31,10 +31,11 @@ args = parser.parse_args()
 debug_level = 'DEBUG' if args.debug else 'NOTSET'
 log_to_console = True if args.debug else False
 log_to_file = True if args.log else False
+log_file = None if not args.log else args.log
 
 #
 # Print the outages to the widget.
 #
 notifier = outagenotifier.OutageNotifier(None, debug_level, log_to_console,
-                                         log_to_file, args.log)
+                                         log_to_file, log_file)
 notifier.widget_init()
