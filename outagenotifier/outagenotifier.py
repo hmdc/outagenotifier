@@ -138,7 +138,7 @@ class OutageNotifier():
     self.hmdclog.log('debug', "Notfications mtime: " + str(mtime))
     self.hmdclog.log('debug', "Last updated: " + str(self.last_updated))
 
-    if mtime != self.last_updated:
+    if mtime != self.last_updated or force_update:
       self.hmdclog.log('info', "Updates found to outage list.")
       self.last_updated = mtime
       outages = self.parse_xml()
