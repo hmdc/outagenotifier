@@ -29,7 +29,7 @@ setup(author='Bradley Frank',
            'webbrowser'],
       scripts=[
            'scripts/outages.py',
-           'scripts/outagenotifier.py'],
+           'scripts/notifications.py'],
       url='https://git.huit.harvard.edu/hmdc/outagenotifier',
       version='1.5',
 )
