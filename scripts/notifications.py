@@ -36,5 +36,5 @@ log_to_file = True if args.log else False
 # Print the outages to the widget.
 #
 notifier = outagenotifier.OutageNotifier(None, debug_level, log_to_console,
-                                         log_to_file, log_file)
+                                         log_to_file, args.log)
 notifier.widget_init()
