@@ -119,8 +119,7 @@ class OutageNotifier():
     if log_to_console:
       hmdclog.log_to_console()
     if log_to_file:
-      if log_file is None:
-        log_file = os.path.expanduser('~') + "/outagenotifier.log"
+      log_file = os.path.expanduser('~') + "/outagenotifier.log"
       hmdclog.log_to_file(log_file)
 
     return hmdclog
