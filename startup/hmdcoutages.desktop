@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=HMDC OutageNotifier
-Exec=/usr/sbin/outageNotifierGUI.py
-Comment=Invokes Notifications to create a Gnome widget for RCE outages.
+Version=1.0
 Encoding=UTF-8
-Type=Application
-StartupNotify=false
+Name=HMDC Outage Notifier
+Exec=/usr/bin/notifications.py
+X-GNOME-Autostart-enabled=true
+Name[en_US]=HMDC Outage Notifier
