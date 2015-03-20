@@ -28,7 +28,7 @@ args = parser.parse_args()
 #
 # Set logging variables.
 #
-debug_level = 'DEBUG' if args.debug else 'NOTSET'
+debug_level = 'DEBUG' if args.debug else None
 log_to_console = True if args.debug else False
 log_to_file = True if args.log else False
 
