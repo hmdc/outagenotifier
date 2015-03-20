@@ -4,4 +4,4 @@ Encoding=UTF-8
 Name=HMDC Outage Notifier
 Exec=/usr/bin/notifications.py
 X-GNOME-Autostart-enabled=true
-Name[en_US]=HMDC Outage Notifier
+Type=Application
