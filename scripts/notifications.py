@@ -21,7 +21,7 @@ __status__ = "Production"
 parser = argparse.ArgumentParser(description="Display RCE outages.")
 parser.add_argument('-d', '--debug', action='store_true',
                     help="Enables verbose output.")
-parser.add_argument('-l', '--log', action='store_true'
+parser.add_argument('-l', '--log', action='store_true',
                     help="Logs to ~/outagenotifier.log")
 args = parser.parse_args()
 
