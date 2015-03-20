@@ -4,6 +4,7 @@
 Script for printing outage information to a Gnome widget.
 """
 
+import argparse
 import outagenotifier
 
 __author__ = "Harvard-MIT Data Center DevOps"
