@@ -31,5 +31,5 @@ setup(author='Bradley Frank',
            'scripts/outages.py',
            'scripts/notifications.py'],
       url='https://git.huit.harvard.edu/hmdc/outagenotifier',
-      version='1.5',
+      version='1.6',
 )
