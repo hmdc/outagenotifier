@@ -196,8 +196,11 @@ class OutageNotifier():
       notify_send.show()
 
       self.hmdclog.log('debug', "")
-    else:
-      # Default case for no notifications.
+
+    #
+    # Default case for no notifications.
+    #
+    if len(outages) == 0:
       icon = self.settings['icon_path'] + "/outages-default.svg"
       tooltip = "There are currently no upcoming outages."
       self.icon.set_from_file(icon)
