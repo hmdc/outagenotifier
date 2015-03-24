@@ -140,9 +140,14 @@ class OutageNotifier():
 
     if mtime != self.last_updated or force_update:
       self.hmdclog.log('info', "Updates found to outage list.")
-      self.last_updated = mtime
+      #
+      # Parse the notifications from the XML file and display; reset the
+      # last updated time to reflect the new time.
+      #
       outages = self.parse_xml()
       self.output_to_widget(outages)
+      self.last_updated = mtime
+      self.hmdclog.log('debug', "Last updated: " + str(self.last_updated))
     else:
       self.hmdclog.log('info', "No updates found to outage list.")
 
@@ -162,6 +167,9 @@ class OutageNotifier():
     counter = 0
     default_urgency = self.notify_urgency['URGENCY_NORMAL']
 
+    #
+    # Iterate over outages to display notifications.
+    #
     for outage in outages:
       counter += 1
 
@@ -188,6 +196,12 @@ class OutageNotifier():
       notify_send.show()
 
       self.hmdclog.log('debug', "")
+    else:
+      # Default case for no notifications.
+      icon = self.settings['icon_path'] + "/outages-default.svg"
+      tooltip = "There are currently no upcoming outages."
+      self.icon.set_from_file(icon)
+      self.icon.set_tooltip(tooltip)
 
   def parse_xml(self):
     """Reads in widget data from notifications XML file."""
@@ -250,7 +264,7 @@ class OutageNotifier():
     # Initialize PyGTK and setup the toolbar icon.
     #
     gtk.gdk.threads_init()
-    default_icon = self.settings['icon_path'] + "/outages-default.svg"
+    default_icon = self.settings['icon_path'] + "/outages-error.svg"
     self.hmdclog.log('debug', "Default icon: " + default_icon)
     self.icon = gtk.status_icon_new_from_file(default_icon)
     self.icon.set_tooltip("Loading...")
